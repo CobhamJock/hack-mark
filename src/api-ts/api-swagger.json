@@ -632,6 +632,76 @@
                 }
             }
         },
+        "/api/inventory/{branchId}/{productId}": {
+            "put": {
+                "summary": "Set branch stock (requires INVENTORY_ADMIN_TOKEN as a Bearer token)",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "branchId",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "productId",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "Authorization",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "quantityOnHand"
+                                ],
+                                "properties": {
+                                    "quantityOnHand": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 2147483647
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated branchId, productId and quantityOnHand"
+                    },
+                    "400": {
+                        "description": "Invalid IDs or stock quantity"
+                    },
+                    "403": {
+                        "description": "Missing or invalid administrator token"
+                    },
+                    "404": {
+                        "description": "Branch or product not found"
+                    },
+                    "503": {
+                        "description": "Administrator token not configured"
+                    }
+                }
+            }
+        },
         "/api/orders": {
             "get": {
                 "summary": "Returns all orders",
@@ -665,6 +735,17 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/Order"
+                            },
+                            "example": {
+                                "branchId": 1,
+                                "name": "Branch restock",
+                                "orderDate": "2026-10-27T12:00:00Z",
+                                "items": [
+                                    {
+                                        "productId": 1,
+                                        "quantity": 2
+                                    }
+                                ]
                             }
                         }
                     }
@@ -679,6 +760,12 @@
                                 }
                             }
                         }
+                    },
+                    "400": {
+                        "description": "Invalid order or quantities"
+                    },
+                    "409": {
+                        "description": "Insufficient stock (entire order rolled back)"
                     }
                 }
             }
@@ -1091,6 +1178,18 @@
         "/api/products": {
             "get": {
                 "summary": "Returns all products",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "branchId",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 1
+                        },
+                        "description": "Branch whose stock to include"
+                    }
+                ],
                 "tags": [
                     "Products"
                 ],
@@ -1146,6 +1245,15 @@
                     "Products"
                 ],
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "branchId",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 1
+                        }
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -1578,6 +1686,46 @@
                     "orderDate"
                 ],
                 "properties": {
+                    "items": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "description": "Optional on create; inserts order and stock-checked lines atomically. Prices come from the server.",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "productId",
+                                "quantity"
+                            ],
+                            "properties": {
+                                "productId": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                },
+                                "quantity": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 2147483647
+                                },
+                                "orderDetailId": {
+                                    "type": "integer",
+                                    "readOnly": true
+                                },
+                                "orderId": {
+                                    "type": "integer",
+                                    "readOnly": true
+                                },
+                                "unitPrice": {
+                                    "type": "number",
+                                    "readOnly": true
+                                },
+                                "notes": {
+                                    "type": "string",
+                                    "readOnly": true
+                                }
+                            }
+                        }
+                    },
                     "orderId": {
                         "type": "integer",
                         "description": "The unique identifier for the order"
@@ -1690,6 +1838,21 @@
                     "unit"
                 ],
                 "properties": {
+                    "quantityOnHand": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "readOnly": true,
+                        "description": "Available quantity at the requested branch (zero if no stock record exists)"
+                    },
+                    "stockStatus": {
+                        "type": "string",
+                        "readOnly": true,
+                        "enum": [
+                            "out_of_stock",
+                            "low_stock",
+                            "in_stock"
+                        ]
+                    },
                     "productId": {
                         "type": "integer",
                         "description": "The unique identifier for the product"

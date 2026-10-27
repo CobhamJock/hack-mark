@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
+
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 
@@ -32,6 +35,24 @@ class DatabaseException(ApiException):
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation(_: Request, __: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"code": "VALIDATION_ERROR", "message": "Validation error: Invalid request"}},
+        )
+
+    @app.exception_handler(sqlite3.IntegrityError)
+    async def handle_integrity_exception(request: Request, exc: sqlite3.IntegrityError) -> JSONResponse:
+        message = str(exc)
+        if message == "Insufficient stock":
+            error = ConflictException(message)
+        elif message in {"Quantity must be a positive integer", "Cannot change branch of an order with items"}:
+            error = ValidationException(message)
+        else:
+            error = ValidationException("Invalid database reference or constraint")
+        return await handle_api_exception(request, error)
+
     @app.exception_handler(ApiException)
     async def handle_api_exception(_: Request, exc: ApiException) -> JSONResponse:
         return JSONResponse(

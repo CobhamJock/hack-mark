@@ -3,9 +3,14 @@
  */
 
 import { getDatabase, DatabaseConnection } from '../db/sqlite';
-import { Product } from '../models/product';
+import { Product, ProductAvailability } from '../models/product';
 import { handleDatabaseError, NotFoundError } from '../utils/errors';
 import { buildInsertSQL, buildUpdateSQL, objectToCamelCase, mapDatabaseRows, DatabaseRow } from '../utils/sql';
+
+const availabilitySQL = `SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
+  CASE WHEN COALESCE(i.quantity_on_hand, 0) = 0 THEN 'out_of_stock'
+       WHEN i.quantity_on_hand <= 5 THEN 'low_stock' ELSE 'in_stock' END AS stock_status
+  FROM products p LEFT JOIN inventory i ON p.product_id = i.product_id AND i.branch_id = ?`;
 
 export class ProductsRepository {
   private db: DatabaseConnection;
@@ -17,10 +22,10 @@ export class ProductsRepository {
   /**
    * Get all products
    */
-  async findAll(): Promise<Product[]> {
+  async findAll(branchId: number = 1): Promise<ProductAvailability[]> {
     try {
-      const rows = await this.db.all<DatabaseRow>('SELECT * FROM products ORDER BY product_id');
-      return mapDatabaseRows<Product>(rows);
+      const rows = await this.db.all<DatabaseRow>(`${availabilitySQL} ORDER BY p.product_id`, [branchId]);
+      return mapDatabaseRows<ProductAvailability>(rows);
     } catch (error) {
       handleDatabaseError(error);
     }
@@ -29,10 +34,10 @@ export class ProductsRepository {
   /**
    * Get product by ID
    */
-  async findById(id: number): Promise<Product | null> {
+  async findById(id: number, branchId: number = 1): Promise<ProductAvailability | null> {
     try {
-      const row = await this.db.get<DatabaseRow>('SELECT * FROM products WHERE product_id = ?', [id]);
-      return row ? objectToCamelCase<Product>(row) : null;
+      const row = await this.db.get<DatabaseRow>(`${availabilitySQL} WHERE p.product_id = ?`, [branchId, id]);
+      return row ? objectToCamelCase<ProductAvailability>(row) : null;
     } catch (error) {
       handleDatabaseError(error);
     }

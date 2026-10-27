@@ -34,11 +34,21 @@ public class OrderDetailsController {
     public OrderDetail create(@RequestBody CreateOrderDetailRequest request) {
         ControllerValidation.requirePositive(request.orderId(), "orderId");
         ControllerValidation.requirePositive(request.productId(), "productId");
+        ControllerValidation.requirePositive(request.quantity(), "quantity");
         return repository.create(request);
     }
 
     @PutMapping("/{id}")
     public OrderDetail update(@PathVariable int id, @RequestBody UpdateOrderDetailRequest request) {
+        if (request.quantity() != null) {
+            ControllerValidation.requirePositive(request.quantity(), "quantity");
+        }
+        if (request.orderId() != null) {
+            ControllerValidation.requirePositive(request.orderId(), "orderId");
+        }
+        if (request.productId() != null) {
+            ControllerValidation.requirePositive(request.productId(), "productId");
+        }
         repository.findById(id).orElseThrow(() -> new NotFoundException("OrderDetail not found"));
         repository.update(id, request);
         return repository.findById(id).orElseThrow(() -> new NotFoundException("OrderDetail not found"));

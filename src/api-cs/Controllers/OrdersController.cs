@@ -23,6 +23,10 @@ public sealed class OrdersController(OrdersRepository repository) : ControllerBa
     }
 
     [HttpPost]
+    [ProducesResponseType<Order>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<Order>> Create([FromBody] CreateOrderRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))

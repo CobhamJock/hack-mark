@@ -9,6 +9,21 @@
  *         - branchId
  *         - orderDate
  *       properties:
+ *         items:
+ *           type: array
+ *           minItems: 1
+ *           maxItems: 100
+ *           description: Optional on create; inserts order and stock-checked lines atomically. Prices come from the server.
+ *           items:
+ *             type: object
+ *             required: [productId, quantity]
+ *             properties:
+ *               productId: {type: integer, minimum: 1}
+ *               quantity: {type: integer, minimum: 1, maximum: 2147483647}
+ *               orderDetailId: {type: integer, readOnly: true}
+ *               orderId: {type: integer, readOnly: true}
+ *               unitPrice: {type: number, readOnly: true}
+ *               notes: {type: string, readOnly: true}
  *         orderId:
  *           type: integer
  *           description: The unique identifier for the order

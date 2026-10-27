@@ -57,14 +57,17 @@ public sealed class DatabaseMigrator(
 
             _logger.LogInformation("Applying migration: {Filename}", filename);
             var sql = await File.ReadAllTextAsync(file);
-            await ExecuteSqlStatementsAsync(connection, sql);
+            await using var transaction = connection.BeginTransaction();
+            await ExecuteSqlScriptAsync(connection, sql, transaction);
 
             var version = ParseMigrationVersion(filename);
             await using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
             insert.CommandText = "INSERT INTO migrations (version, filename) VALUES ($version, $filename);";
             insert.Parameters.AddWithValue("$version", version);
             insert.Parameters.AddWithValue("$filename", filename);
             await insert.ExecuteNonQueryAsync();
+            await transaction.CommitAsync();
         }
     }
 
@@ -109,7 +112,9 @@ public sealed class DatabaseMigrator(
         {
             _logger.LogInformation("Applying seed file: {Filename}", Path.GetFileName(file));
             var sql = await File.ReadAllTextAsync(file);
-            await ExecuteSqlStatementsAsync(connection, sql);
+            await using var transaction = connection.BeginTransaction();
+            await ExecuteSqlScriptAsync(connection, sql, transaction);
+            await transaction.CommitAsync();
         }
     }
 
@@ -122,22 +127,13 @@ public sealed class DatabaseMigrator(
         return count > 0;
     }
 
-    private static async Task ExecuteSqlStatementsAsync(SqliteConnection connection, string sqlScript)
+    private static async Task ExecuteSqlScriptAsync(
+        SqliteConnection connection, string sqlScript, SqliteTransaction transaction)
     {
-        var statements = sqlScript
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(statement => !string.IsNullOrWhiteSpace(statement))
-            .ToList();
-
-        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
-        foreach (var statement in statements)
-        {
-            await using var cmd = connection.CreateCommand();
-            cmd.Transaction = transaction;
-            cmd.CommandText = statement;
-            await cmd.ExecuteNonQueryAsync();
-        }
-        await transaction.CommitAsync();
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = sqlScript;
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static int ParseMigrationVersion(string filename)

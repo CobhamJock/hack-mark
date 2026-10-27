@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from models.order import CreateOrderRequest, Order, UpdateOrderRequest
+from models.order import CreateOrderRequest, Order, OrderWithItems, UpdateOrderRequest
 from repositories.orders import OrdersRepository
 from utils.errors import NotFoundException, ValidationException
 
@@ -23,8 +23,12 @@ async def get_by_id(order_id: int) -> Order:
     return order
 
 
-@router.post("", response_model=Order, status_code=201)
-async def create(request: CreateOrderRequest) -> Order:
+@router.post(
+    "", response_model=OrderWithItems | Order, status_code=201,
+    responses={400: {"description": "Invalid order or items"}, 404: {"description": "Branch or product not found"},
+               409: {"description": "Insufficient stock; no writes committed"}},
+)
+async def create(request: CreateOrderRequest) -> Order | OrderWithItems:
     if not request.name.strip():
         raise ValidationException("name is required")
     if request.branchId <= 0:

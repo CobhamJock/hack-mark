@@ -25,6 +25,59 @@ The database consists of the following tables:
 - `deliveries` - Delivery tracking (linked to suppliers)
 - `order_detail_deliveries` - Junction table for order-delivery relationships
 - `migrations` - Database schema version tracking
+- `inventory` - Available stock per branch/product (migration 003)
+- `inventory_allocations` - Order details whose stock was allocated after migration 003
+
+### Branch inventory
+
+All four APIs use the shared inventory table and allocation triggers. Product reads accept
+`?branchId=1` (default 1) and return `quantityOnHand` and `stockStatus`:
+`out_of_stock` for zero, `low_stock` for 1-5, and `in_stock` above 5. Missing inventory
+records mean zero available, not unlimited stock. Invalid branch IDs return 400; absent
+branches return 404.
+
+Fresh demo databases seed 3 units of product 1, zero of product 2, and 20 of each other
+product at each branch. **Existing databases are not assigned invented stock on upgrade**:
+enter actual counts through the inventory screen/API. Historical order details are not
+reallocated during migration.
+
+Set `INVENTORY_ADMIN_TOKEN` in the API process environment to a strong secret before
+using `PUT /api/inventory/{branchId}/{productId}`. Send `Authorization: Bearer <token>`
+and JSON `{"quantityOnHand": 12}`. Quantities must be integers from 0 to 2147483647.
+Unconfigured administration returns 503; missing/incorrect tokens return 403.
+Use HTTPS outside local development. No token is checked into source or saved in
+browser storage. The existing demonstration login is not server-side authentication;
+the token is an independent server-side safeguard for stock changes.
+
+In the UI, sign in with the existing demo admin account pattern and choose **Admin >
+Manage Inventory**. Select the branch, enter the administrator token, and save the
+physical quantity on hand for each product. The catalogue also allows branch selection
+and shows stock counts, including within the product detail view.
+
+To place a complete stock-checked order, `POST /api/orders` with the existing order fields
+and an optional non-empty `items` array (up to 100 lines):
+
+```json
+{
+  "branchId": 1,
+  "name": "Branch order",
+  "orderDate": "2026-10-27T12:00:00Z",
+  "items": [{"productId": 1, "quantity": 2}]
+}
+```
+
+The server derives discounted unit prices from the catalogue, creates order/details and
+decrements stock in one transaction. The response includes persisted `items`. Insufficient
+stock returns 409 and rolls back the entire order. Legacy header-only order creation remains
+available; legacy detail inserts/updates allocate stock too. Deleting a detail/order restores
+its allocation; changing an order's branch while it has details is rejected with 400.
+Cancellation/status changes do not currently release stock (order workflow is a separate
+backlog feature). Product/branch deletion retains the existing cascade behavior.
+
+Migration runners execute complete trigger definitions rather than splitting at every
+semicolon. Back up the database before upgrading. For manual schema rollback, remove the
+five `inventory_*` triggers before dropping inventory allocations and inventory; rollback is not an
+automatic reversal of historical allocations. Do not edit historical migrations.
 
 ## Getting Started
 

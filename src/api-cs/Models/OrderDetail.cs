@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace OctoSupply.Api.Models;
 
 public sealed record OrderDetail(
@@ -10,8 +12,11 @@ public sealed record OrderDetail(
 
 public sealed class CreateOrderDetailRequest
 {
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int OrderId { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int ProductId { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int Quantity { get; set; }
     public double UnitPrice { get; set; }
     public string? Notes { get; set; }
@@ -19,8 +24,11 @@ public sealed class CreateOrderDetailRequest
 
 public sealed class UpdateOrderDetailRequest
 {
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int? OrderId { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int? ProductId { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int? Quantity { get; set; }
     public double? UnitPrice { get; set; }
     public string? Notes { get; set; }

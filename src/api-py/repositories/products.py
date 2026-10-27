@@ -1,17 +1,44 @@
 from __future__ import annotations
 
 from database.sqlite import get_connection
-from models.product import CreateProductRequest, Product, UpdateProductRequest
+from models.product import CreateProductRequest, Product, ProductAvailability, UpdateProductRequest
 from repositories._helpers import build_update_statement, execute_with_changes
+from repositories.inventory import require_branch
 from utils.errors import DatabaseException, NotFoundException
 
 
 class ProductsRepository:
-    async def find_all(self) -> list[Product]:
+    async def find_all(self, branch_id: int = 1) -> list[ProductAvailability]:
         async with get_connection() as connection:
-            cursor = await connection.execute("SELECT * FROM products ORDER BY product_id;")
+            await require_branch(connection, branch_id)
+            cursor = await connection.execute(
+                """
+                SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+                FROM products p LEFT JOIN inventory i
+                ON i.product_id = p.product_id AND i.branch_id = ?
+                ORDER BY p.product_id;
+                """,
+                (branch_id,),
+            )
             rows = await cursor.fetchall()
-        return [self._map_row(row) for row in rows]
+        return [self._map_availability(row) for row in rows]
+
+    async def find_available_by_id(self, product_id: int, branch_id: int = 1) -> ProductAvailability | None:
+        async with get_connection() as connection:
+            await require_branch(connection, branch_id)
+            if product_id > 9223372036854775807:
+                return None
+            cursor = await connection.execute(
+                """
+                SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+                FROM products p LEFT JOIN inventory i
+                ON i.product_id = p.product_id AND i.branch_id = ?
+                WHERE p.product_id = ?;
+                """,
+                (branch_id, product_id),
+            )
+            row = await cursor.fetchone()
+        return self._map_availability(row) if row else None
 
     async def find_by_id(self, product_id: int) -> Product | None:
         async with get_connection() as connection:
@@ -88,6 +115,15 @@ class ProductsRepository:
             )
         if changes == 0:
             raise NotFoundException("Product", product_id)
+
+    @staticmethod
+    def _map_availability(row: object) -> ProductAvailability:
+        quantity = int(row["quantity_on_hand"])
+        return ProductAvailability(
+            **ProductsRepository._map_row(row).model_dump(),
+            quantityOnHand=quantity,
+            stockStatus="out_of_stock" if quantity == 0 else "low_stock" if quantity <= 5 else "in_stock",
+        )
 
     @staticmethod
     def _map_row(row: object) -> Product:

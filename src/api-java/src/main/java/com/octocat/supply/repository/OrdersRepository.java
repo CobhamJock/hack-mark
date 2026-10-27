@@ -3,9 +3,11 @@ package com.octocat.supply.repository;
 import com.octocat.supply.model.OrderModel.CreateOrderRequest;
 import com.octocat.supply.model.OrderModel.Order;
 import com.octocat.supply.model.OrderModel.UpdateOrderRequest;
+import com.octocat.supply.model.OrderDetailModel.CreateOrderDetailRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +15,8 @@ import java.util.Optional;
 @Repository
 public class OrdersRepository {
     private final JdbcTemplate jdbcTemplate;
+    private final InventoryRepository inventory;
+    private final OrderDetailsRepository details;
 
     private final RowMapper<Order> mapper = (rs, rowNum) -> new Order(
         rs.getInt("order_id"),
@@ -23,8 +27,10 @@ public class OrdersRepository {
         rs.getString("status")
     );
 
-    public OrdersRepository(JdbcTemplate jdbcTemplate) {
+    public OrdersRepository(JdbcTemplate jdbcTemplate, InventoryRepository inventory, OrderDetailsRepository details) {
         this.jdbcTemplate = jdbcTemplate;
+        this.inventory = inventory;
+        this.details = details;
     }
 
     public List<Order> findAll() {
@@ -35,7 +41,14 @@ public class OrdersRepository {
         return jdbcTemplate.query("SELECT * FROM orders WHERE order_id = ?", mapper, id).stream().findFirst();
     }
 
+    @Transactional
     public Order create(CreateOrderRequest request) {
+        inventory.requireBranch(request.branchId());
+        if (request.items() != null) {
+            for (var item : request.items()) {
+                inventory.requireProduct(item.productId());
+            }
+        }
         jdbcTemplate.update(
             """
                 INSERT INTO orders (branch_id, order_date, name, description, status)
@@ -48,7 +61,15 @@ public class OrdersRepository {
             request.status() == null ? "pending" : request.status()
         );
         Integer id = jdbcTemplate.queryForObject("SELECT last_insert_rowid()", Integer.class);
-        return findById(id).orElseThrow();
+        Order order = findById(id).orElseThrow();
+        if (request.items() == null) {
+            return order;
+        }
+        for (var item : request.items()) {
+            details.create(new CreateOrderDetailRequest(id, item.productId(), item.quantity()));
+        }
+        return new Order(order.orderId(), order.branchId(), order.orderDate(), order.name(), order.description(),
+            order.status(), details.findByOrderId(id));
     }
 
     public boolean update(int id, UpdateOrderRequest request) {

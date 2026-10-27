@@ -5,6 +5,8 @@ import com.octocat.supply.model.ProductModel.CreateProductRequest;
 import com.octocat.supply.model.ProductModel.Product;
 import com.octocat.supply.model.ProductModel.UpdateProductRequest;
 import com.octocat.supply.repository.ProductsRepository;
+import com.octocat.supply.repository.InventoryRepository;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,19 +16,27 @@ import java.util.List;
 @RequestMapping("/api/products")
 public class ProductsController {
     private final ProductsRepository repository;
+    private final InventoryRepository inventory;
 
-    public ProductsController(ProductsRepository repository) {
+    public ProductsController(ProductsRepository repository, InventoryRepository inventory) {
         this.repository = repository;
+        this.inventory = inventory;
     }
 
     @GetMapping
-    public List<Product> getAll() {
-        return repository.findAll();
+    @Operation(summary = "List products with stock for a branch (default 1)")
+    public List<Product> getAll(@RequestParam(required = false) String branchId) {
+        int branch = branchId == null ? 1 : ControllerValidation.positiveId(branchId, "branchId");
+        inventory.requireBranch(branch);
+        return repository.findAll(branch);
     }
 
     @GetMapping("/{id}")
-    public Product getById(@PathVariable int id) {
-        return repository.findById(id).orElseThrow(() -> new NotFoundException("Product not found"));
+    @Operation(summary = "Get a product with stock for a branch (default 1)")
+    public Product getById(@PathVariable int id, @RequestParam(required = false) String branchId) {
+        int branch = branchId == null ? 1 : ControllerValidation.positiveId(branchId, "branchId");
+        inventory.requireBranch(branch);
+        return repository.findById(id, branch).orElseThrow(() -> new NotFoundException("Product not found"));
     }
 
     @PostMapping

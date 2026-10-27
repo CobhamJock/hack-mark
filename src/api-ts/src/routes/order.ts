@@ -29,6 +29,12 @@
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/Order'
+ *           example:
+ *             branchId: 1
+ *             name: Branch restock
+ *             orderDate: '2026-10-27T12:00:00Z'
+ *             items:
+ *               - {productId: 1, quantity: 2}
  *     responses:
  *       201:
  *         description: Order created successfully
@@ -36,6 +42,10 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Order'
+ *       400:
+ *         description: Invalid order or quantities
+ *       409:
+ *         description: Insufficient stock (entire order rolled back)
  *
  * /api/orders/{id}:
  *   get:
@@ -102,7 +112,7 @@
 import express from 'express';
 import { Order } from '../models/order';
 import { getOrdersRepository } from '../repositories/ordersRepo';
-import { handleDatabaseError, NotFoundError } from '../utils/errors';
+import { NotFoundError } from '../utils/errors';
 
 const router = express.Router();
 
@@ -110,7 +120,9 @@ const router = express.Router();
 router.post('/', async (req, res, next) => {
   try {
     const repo = await getOrdersRepository();
-    const newOrder = await repo.create(req.body as Omit<Order, 'orderId'>);
+    const newOrder = req.body && 'items' in req.body
+      ? repo.createWithItems(req.body)
+      : await repo.create(req.body as Omit<Order, 'orderId'>);
     res.status(201).json(newOrder);
   } catch (error) {
     next(error);

@@ -11,10 +11,8 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 public class DatabaseInitializer implements ApplicationRunner {
@@ -66,13 +64,25 @@ public class DatabaseInitializer implements ApplicationRunner {
                 continue;
             }
 
+            applyMigration(connection, file);
+        }
+    }
+
+    void applyMigration(Connection connection, Path file) throws Exception {
+        connection.setAutoCommit(false);
+        try {
             executeSqlFile(connection, file);
-            int version = parseMigrationVersion(filename);
             try (var statement = connection.prepareStatement("INSERT INTO migrations (version, filename) VALUES (?, ?)")) {
-                statement.setInt(1, version);
-                statement.setString(2, filename);
+                statement.setInt(1, parseMigrationVersion(file.getFileName().toString()));
+                statement.setString(2, file.getFileName().toString());
                 statement.executeUpdate();
             }
+            connection.commit();
+        } catch (Exception ex) {
+            connection.rollback();
+            throw ex;
+        } finally {
+            connection.setAutoCommit(true);
         }
     }
 
@@ -113,44 +123,26 @@ public class DatabaseInitializer implements ApplicationRunner {
                 .toList();
         }
 
-        for (Path file : files) {
-            executeSqlFile(connection, file);
+        connection.setAutoCommit(false);
+        try {
+            for (Path file : files) {
+                executeSqlFile(connection, file);
+            }
+            connection.commit();
+        } catch (Exception ex) {
+            connection.rollback();
+            throw ex;
+        } finally {
+            connection.setAutoCommit(true);
         }
     }
 
     private void executeSqlFile(Connection connection, Path file) throws Exception {
-        String sql = Files.readString(file);
-        List<String> statements = splitStatements(sql);
-
         try (Statement statement = connection.createStatement()) {
-            connection.setAutoCommit(false);
-            try {
-                for (String sqlStatement : statements) {
-                    statement.execute(sqlStatement);
-                }
-                connection.commit();
-            } catch (Exception ex) {
-                connection.rollback();
-                throw ex;
-            } finally {
-                connection.setAutoCommit(true);
-            }
+            // Xerial's executeUpdate uses sqlite3_exec to parse the complete script,
+            // preserving semicolons inside trigger bodies and quoted strings.
+            statement.executeUpdate(Files.readString(file));
         }
-    }
-
-    private List<String> splitStatements(String sqlScript) {
-        String withoutComments = sqlScript.lines()
-            .filter(line -> !line.trim().startsWith("--"))
-            .collect(Collectors.joining("\n"));
-
-        List<String> statements = new ArrayList<>();
-        for (String part : withoutComments.split(";")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                statements.add(trimmed);
-            }
-        }
-        return statements;
     }
 
     private int parseMigrationVersion(String filename) {

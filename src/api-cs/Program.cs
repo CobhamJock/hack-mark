@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT") ?? "3000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(ApiValidation.Configure);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 
@@ -20,6 +20,7 @@ builder.Services.AddScoped<OrderDetailDeliveriesRepository>();
 builder.Services.AddScoped<OrderDetailsRepository>();
 builder.Services.AddScoped<OrdersRepository>();
 builder.Services.AddScoped<ProductsRepository>();
+builder.Services.AddScoped<InventoryRepository>();
 builder.Services.AddScoped<SuppliersRepository>();
 
 builder.Services.AddCors(options =>

@@ -13,8 +13,12 @@ public final class ProductModel {
         String sku,
         String unit,
         String imgName,
-        double discount
+        double discount,
+        long quantityOnHand
     ) {
+        public String getStockStatus() {
+            return quantityOnHand == 0 ? "out_of_stock" : quantityOnHand <= 5 ? "low_stock" : "in_stock";
+        }
     }
 
     public record CreateProductRequest(

@@ -76,7 +76,11 @@ export default function Navigation() {
                         >
                           Manage Products
                         </Link>
-                        {/* Space for other entity management links */}
+                        <Link to="/admin/inventory"
+                          className={`block px-4 py-2 text-sm ${darkMode ? 'text-light' : 'text-gray-700'} hover:bg-primary hover:text-white`}
+                          onClick={() => setAdminMenuOpen(false)}>
+                          Manage Inventory
+                        </Link>
                       </div>
                     </div>
                   )}

@@ -93,23 +93,12 @@ export class MigrationRunner {
     console.log(`Applying migration ${migration.version}: ${migration.filename}`);
 
     try {
-      // Split SQL into individual statements and execute each
-      const statements = migration.sql
-        .split(';')
-        .map((stmt) => stmt.trim())
-        .filter((stmt) => stmt.length > 0);
-
-      for (const statement of statements) {
-        if (statement.trim()) {
-          await this.db.run(statement);
-        }
-      }
-
-      // Record the migration as applied
-      await this.db.run('INSERT INTO migrations (version, filename) VALUES (?, ?)', [
-        migration.version,
-        migration.filename,
-      ]);
+      // Execute whole scripts so trigger bodies remain intact.
+      this.db.db.transaction(() => {
+        this.db.db.exec(migration.sql);
+        this.db.db.prepare('INSERT INTO migrations (version, filename) VALUES (?, ?)')
+          .run(migration.version, migration.filename);
+      })();
 
       console.log(`✅ Migration ${migration.version} applied successfully`);
     } catch (error) {

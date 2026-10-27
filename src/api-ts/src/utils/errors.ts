@@ -40,6 +40,15 @@ export class ConflictError extends DatabaseError {
  * Handle database errors and convert SQLite-specific errors to appropriate types
  */
 export function handleDatabaseError(error: unknown, entity?: string, id?: string | number): never {
+  if (error instanceof Error && error.message === 'Insufficient stock') {
+    throw new ConflictError('Insufficient stock');
+  }
+  if (error instanceof Error && (
+    error.message === 'Quantity must be a positive integer' ||
+    error.message === 'Cannot change branch of an order with items'
+  )) {
+    throw new ValidationError(error.message);
+  }
   if(!(error instanceof DatabaseError)) {
     const message = error instanceof Error ? error.message : error;
 

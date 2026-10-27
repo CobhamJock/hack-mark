@@ -23,7 +23,8 @@ public class ProductsRepository {
         rs.getString("sku"),
         rs.getString("unit"),
         rs.getString("img_name"),
-        rs.getDouble("discount")
+        rs.getDouble("discount"),
+        rs.getLong("quantity_on_hand")
     );
 
     public ProductsRepository(JdbcTemplate jdbcTemplate) {
@@ -31,11 +32,27 @@ public class ProductsRepository {
     }
 
     public List<Product> findAll() {
-        return jdbcTemplate.query("SELECT * FROM products ORDER BY product_id", mapper);
+        return findAll(1);
+    }
+
+    public List<Product> findAll(int branchId) {
+        return jdbcTemplate.query("""
+            SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+            FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id AND i.branch_id = ?
+            ORDER BY p.product_id
+            """, mapper, branchId);
     }
 
     public Optional<Product> findById(int id) {
-        return jdbcTemplate.query("SELECT * FROM products WHERE product_id = ?", mapper, id).stream().findFirst();
+        return findById(id, 1);
+    }
+
+    public Optional<Product> findById(int id, int branchId) {
+        return jdbcTemplate.query("""
+            SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+            FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id AND i.branch_id = ?
+            WHERE p.product_id = ?
+            """, mapper, branchId, id).stream().findFirst();
     }
 
     public Product create(CreateProductRequest request) {

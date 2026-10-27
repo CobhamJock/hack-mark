@@ -9,12 +9,19 @@ public sealed class ProductsRepository(SqliteConnectionFactory connectionFactory
 {
     private readonly SqliteConnectionFactory _connectionFactory = connectionFactory;
 
-    public async Task<IReadOnlyList<Product>> FindAllAsync()
+    public async Task<IReadOnlyList<Product>> FindAllAsync(int branchId = 1)
     {
-        const string sql = "SELECT * FROM products ORDER BY product_id;";
+        const string sql = """
+            SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+            FROM products p LEFT JOIN inventory i
+                ON i.product_id = p.product_id AND i.branch_id = $branchId
+            ORDER BY p.product_id;
+            """;
         await using var connection = await _connectionFactory.OpenConnectionAsync();
+        await InventoryRepository.RequireBranchAsync(connection, branchId);
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
+        cmd.Parameters.AddWithValue("$branchId", branchId);
         await using var reader = await cmd.ExecuteReaderAsync();
         var items = new List<Product>();
         while (await reader.ReadAsync())
@@ -24,13 +31,23 @@ public sealed class ProductsRepository(SqliteConnectionFactory connectionFactory
         return items;
     }
 
-    public async Task<Product?> FindByIdAsync(int id)
+    public async Task<Product?> FindByIdAsync(int id, int? branchId = null)
     {
-        const string sql = "SELECT * FROM products WHERE product_id = $id;";
+        const string sql = """
+            SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
+            FROM products p LEFT JOIN inventory i
+                ON i.product_id = p.product_id AND i.branch_id = $branchId
+            WHERE p.product_id = $id;
+            """;
         await using var connection = await _connectionFactory.OpenConnectionAsync();
+        if (branchId.HasValue)
+        {
+            await InventoryRepository.RequireBranchAsync(connection, branchId.Value);
+        }
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$branchId", branchId ?? 1);
         await using var reader = await cmd.ExecuteReaderAsync();
         return await reader.ReadAsync() ? Map(reader) : null;
     }
@@ -120,5 +137,8 @@ public sealed class ProductsRepository(SqliteConnectionFactory connectionFactory
             Unit: reader.GetString(reader.GetOrdinal("unit")),
             ImgName: reader["img_name"] as string,
             Discount: reader.GetDouble(reader.GetOrdinal("discount"))
-        );
+        )
+        {
+            QuantityOnHand = reader.GetInt32(reader.GetOrdinal("quantity_on_hand"))
+        };
 }

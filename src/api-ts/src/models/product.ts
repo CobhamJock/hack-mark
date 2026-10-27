@@ -12,6 +12,15 @@
  *         - sku
  *         - unit
  *       properties:
+ *         quantityOnHand:
+ *           type: integer
+ *           minimum: 0
+ *           readOnly: true
+ *           description: Available quantity at the requested branch (zero if no stock record exists)
+ *         stockStatus:
+ *           type: string
+ *           readOnly: true
+ *           enum: [out_of_stock, low_stock, in_stock]
  *         productId:
  *           type: integer
  *           description: The unique identifier for the product
@@ -52,4 +61,9 @@ export interface Product {
   unit: string;
   imgName: string;
   discount?: number;
+}
+
+export interface ProductAvailability extends Product {
+  quantityOnHand: number;
+  stockStatus: 'out_of_stock' | 'low_stock' | 'in_stock';
 }

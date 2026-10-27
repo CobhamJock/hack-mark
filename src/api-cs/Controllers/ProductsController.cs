@@ -12,13 +12,18 @@ public sealed class ProductsController(ProductsRepository repository) : Controll
     private readonly ProductsRepository _repository = repository;
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<Product>>> GetAll() =>
-        Ok(await _repository.FindAllAsync());
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<Product>>> GetAll([FromQuery] int branchId = 1) =>
+        Ok(await _repository.FindAllAsync(branchId));
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<Product>> GetById(int id)
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Product>> GetById(int id, [FromQuery] int branchId = 1)
     {
-        var item = await _repository.FindByIdAsync(id);
+        if (id <= 0) throw new ValidationException("id must be a positive integer");
+        var item = await _repository.FindByIdAsync(id, branchId);
         return item is null ? throw new NotFoundException("Product", id) : Ok(item);
     }
 
