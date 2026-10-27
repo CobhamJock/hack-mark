@@ -62,6 +62,13 @@ export function handleDatabaseError(error: unknown, entity?: string, id?: string
       if (sqliteCode === 'SQLITE_CONSTRAINT_NOTNULL' || sqliteCode === 'SQLITE_CONSTRAINT_CHECK') {
         throw new ValidationError('Request violates a data constraint');
       }
+      if (
+        sqliteCode === 'SQLITE_ERROR' &&
+        error instanceof Error &&
+        /has no column named|no such column/.test(error.message)
+      ) {
+        throw new ValidationError('Request contains an unknown field');
+      }
     }
     const message = error instanceof Error ? error.message : error;
 
