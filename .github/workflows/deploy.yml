@@ -73,6 +73,15 @@ jobs:
           az acr build -r "${{ steps.platform.outputs.acr }}" -t "frontend:$TAG" \
             src/frontend
 
+      # SQLite on Azure Files must have a single writer. Container Apps keeps the
+      # old revision serving until the new one is ready, so stop the old API first.
+      - name: Stop running API replicas (exclusive SQLite access)
+        run: |
+          api=$(az containerapp list -g "$RG" --query "[?ends_with(name,'-api')].name | [0]" -o tsv)
+          if [ -n "$api" ]; then
+            az containerapp update -g "$RG" -n "$api" --min-replicas 0 --max-replicas 0
+          fi
+
       - name: Deploy container apps
         id: apps
         run: |
