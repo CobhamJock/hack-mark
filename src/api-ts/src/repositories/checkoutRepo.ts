@@ -1,6 +1,9 @@
 import { DatabaseConnection } from '../db/sqlite';
 import { CheckoutRequest, CheckoutRow, CheckoutSnapshot } from '../models/checkout';
 import { ConflictError, DatabaseError, NotFoundError, ValidationError } from '../utils/errors';
+import Decimal from 'decimal.js';
+
+const PriceDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 
 export class CheckoutRepository {
   constructor(private readonly connection: DatabaseConnection) {}
@@ -42,7 +45,8 @@ export class CheckoutRepository {
           WHERE p.product_id=?`).get(input.branchId, item.productId);
         if (!product) throw new NotFoundError('Product', item.productId);
         if (product.quantity_on_hand < item.quantity) throw new ConflictError('Insufficient stock');
-        const cents = Math.round(product.price * (1 - (product.discount ?? 0)) * 100);
+        const cents = new PriceDecimal(product.price).times(new PriceDecimal(1).minus(product.discount ?? 0))
+          .times(100).toDecimalPlaces(0).toNumber();
         if (!Number.isSafeInteger(cents) || cents <= 0) throw new ValidationError('Product price cannot be paid online');
         total += cents * item.quantity;
         if (!Number.isSafeInteger(total) || total > 99999999) throw new ValidationError('Cart total exceeds the payment limit');

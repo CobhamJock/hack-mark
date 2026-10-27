@@ -65,6 +65,9 @@ the **same** cart. Payment totals must be USD 0.50–999,999.99. Quantities/IDs 
 of 2147483647. Accepts 1–100 lines; duplicate products are combined before checking
 stock and totals. Changing a cart bound to an existing UUID returns `409 CONFLICT`.
 Prices supplied by the client are never authoritative.
+Discounted unit prices are calculated with decimal arithmetic and rounded half-up
+to integer cents before multiplying by quantity (for example, USD 19.99 at 50% off
+is 1000 cents per item).
 
 ```json
 {

@@ -99,6 +99,37 @@ describe('Hosted payment checkout', () => {
     expect((await counts()).orders).toEqual({ count: 0 });
   });
 
+  it.each([
+    { price: 19.99, discount: 0.5, cents: 1000 },
+    { price: 1.005, discount: 0, cents: 101 },
+    { price: 19.99, discount: 0.4999999999, cents: 1000 },
+    { price: 19.99, discount: 0.5000000001, cents: 999 },
+    { price: 129.99, discount: 0.25, cents: 9749 },
+    { price: 10, discount: 1e-7, cents: 1000 },
+  ])('rounds discounted decimal prices half-up ($price, $discount)', async ({ price, discount, cents }) => {
+    const db = await getDatabase();
+    await db.run('UPDATE products SET price=?,discount=? WHERE product_id=1', [price, discount]);
+    const input = body();
+    const response = await request(app).post('/api/checkout').send(input);
+    expect(response.status).toBe(200);
+    expect(response.body.amountTotal).toBe(cents * 2);
+    expect(calls[0].form.get('line_items[0][price_data][unit_amount]')).toBe(String(cents));
+    const snapshot = db.db.prepare<[string], { items_json: string }>(
+      'SELECT items_json FROM checkouts WHERE checkout_id=?').get(input.checkoutId);
+    if (!snapshot) throw new Error('Checkout snapshot was not persisted');
+    expect(JSON.parse(snapshot.items_json)).toEqual([
+      { productId: 1, quantity: 2, unitPriceCents: cents, name: 'SmartFeeder One' },
+    ]);
+    expect((await request(app).post('/api/checkout').send(input)).body.amountTotal).toBe(cents * 2);
+    expect(calls).toHaveLength(1);
+    paid();
+    const completed = await request(app).post(`/api/checkout/${input.checkoutId}/complete`);
+    expect(completed.status).toBe(200);
+    expect(completed.body).toMatchObject({ status: 'completed', amountTotal: cents * 2 });
+    expect(db.db.prepare('SELECT quantity,unit_price FROM order_details').get())
+      .toEqual({ quantity: 2, unit_price: cents / 100 });
+  });
+
   it('verifies payment and creates exactly one confirmed order with stock allocation', async () => {
     const input = await start();
     paid();
