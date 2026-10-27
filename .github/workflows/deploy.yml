@@ -38,9 +38,14 @@ jobs:
           npm ci
           npm run build
       - name: Validate Bicep
-        run: az bicep build --file infra/main.bicep
+        run: |
+          az bicep build --file infra/main.bicep
+          az bicep build --file infra/private-network.bicep
+      - name: Test exclusive API shutdown
+        run: bash .github/scripts/stop-api-revisions.test.sh
 
   deploy:
+    timeout-minutes: 45
     needs: test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -58,13 +63,13 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Provision platform (registry, storage, environment)
+      - name: Provision private network and replacement environment
         id: platform
         run: |
-          az deployment group create -g "$RG" -f infra/main.bicep \
+          az deployment group create -g "$RG" -f infra/private-network.bicep \
             -p infra/main.parameters.json deployApps=false \
-            --query properties.outputs.acrName.value -o tsv > acr.txt
-          echo "acr=$(cat acr.txt)" >> "$GITHUB_OUTPUT"
+            --query properties.outputs -o json > platform.json
+          echo "acr=$(jq -er .acrName.value platform.json)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push images
         run: |
@@ -78,31 +83,13 @@ jobs:
       # before the new revision is created.
       - name: Stop old API revisions (exclusive SQLite access)
         run: |
-          api=$(az containerapp list -g "$RG" --query "[?ends_with(name,'-api')].name | [0]" -o tsv)
-          if [ -n "$api" ]; then
-            # --all includes inactive revisions, so the shutdown check still covers
-            # revisions deactivated by this step or earlier runs
-            revs=$(az containerapp revision list -g "$RG" -n "$api" --all --query "[].name" -o tsv)
-            for rev in $(az containerapp revision list -g "$RG" -n "$api" --query "[?properties.active].name" -o tsv); do
-              az containerapp revision deactivate -g "$RG" -n "$api" --revision "$rev"
-            done
-            for i in $(seq 1 30); do
-              running=0
-              for rev in $revs; do
-                # a failed query must not be read as "no replicas"
-                n=$(az containerapp replica list -g "$RG" -n "$api" --revision "$rev" --query "length(@)" -o tsv) || { echo "replica query failed"; exit 1; }
-                running=$((running + n))
-              done
-              echo "API replicas still running: $running"
-              [ "$running" -eq 0 ] && break
-              [ "$i" -eq 30 ] && { echo "Old API replicas did not stop"; exit 1; }
-              sleep 10
-            done
-          fi
+          legacy=$(jq -er .legacyApiAppName.value platform.json)
+          api=$(jq -er .apiAppName.value platform.json)
+          bash .github/scripts/stop-api-revisions.sh "$RG" "$legacy" "$api"
       - name: Deploy container apps
         id: apps
         run: |
-          az deployment group create -g "$RG" -f infra/main.bicep \
+          az deployment group create -g "$RG" -f infra/private-network.bicep \
             -p infra/main.parameters.json deployApps=true imageTag="$TAG" \
             apiRevisionSuffix="g${{ github.run_id }}-${{ github.run_attempt }}" \
             --query properties.outputs -o json > outputs.json
@@ -113,9 +100,14 @@ jobs:
         run: |
           for url in "${{ steps.apps.outputs.api }}/api/products" "${{ steps.apps.outputs.frontend }}/"; do
             for i in $(seq 1 20); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)
+              code=$(curl --connect-timeout 10 --max-time 20 -sS -o response.json -w '%{http_code}' "$url") || code=000
               echo "$url -> $code"
-              [ "$code" = "200" ] && continue 2
+              if [ "$code" = "200" ]; then
+                if [[ "$url" != */api/products ]] || jq -e 'type == "array" and length > 0 and all(.[]; has("productId") and has("name"))' response.json; then
+                  continue 2
+                fi
+                echo "Products endpoint did not return a non-empty product list"
+              fi
               sleep 15
             done
             echo "Smoke test failed for $url"; exit 1

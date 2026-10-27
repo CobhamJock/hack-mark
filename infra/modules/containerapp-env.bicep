@@ -1,11 +1,8 @@
 // =============================================================================
 // Module: containerapp-env.bicep  (Azure Container Apps managed environment)
 // -----------------------------------------------------------------------------
-// The shared environment both apps (api + frontend) run in. Apps in the same
-// environment can reach each other by app name for service discovery — this is
-// what lets the frontend's nginx proxy to the api (see API_HOST/API_PORT).
-//
-// STARTER SKELETON — compiles as-is; decisions left as // TODO.
+// The browser calls the API's public URL; VNet integration provides private
+// outbound access to the Azure Files database share.
 // =============================================================================
 
 @description('Azure region for the environment.')
@@ -19,6 +16,9 @@ param logAnalyticsWorkspaceId string
 
 @description('Tags applied to the environment.')
 param tags object = {}
+
+@description('Dedicated, Microsoft.App/environments-delegated subnet. Empty retains the original public environment configuration.')
+param infrastructureSubnetId string = ''
 
 @description('Storage account holding the Azure Files share for the API database.')
 param storageAccountName string
@@ -50,9 +50,16 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
       }
     }
-    // TODO: Decide whether you need a custom VNet (internal-only environment),
-    //       zone redundancy, or workload profiles (Consumption vs Dedicated).
-    //       The default is the public, Consumption-only profile — fine to start.
+    vnetConfiguration: empty(infrastructureSubnetId) ? null : {
+      infrastructureSubnetId: infrastructureSubnetId
+      internal: false
+    }
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
   }
 }
 
