@@ -12,6 +12,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(PaymentException.class)
+    public ResponseEntity<Map<String, Object>> handlePayment(PaymentException exception) {
+        return error(HttpStatus.valueOf(exception.getStatus()), exception);
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(NotFoundException exception) {
         return error(HttpStatus.NOT_FOUND, exception);

@@ -69,6 +69,51 @@ No inventory-contract parity deviations are intentional. Existing Java header-on
 orders still require `orderDate` as in the original Java API; omitting `items` does
 not add an `items` field to the response.
 
+## Hosted payments
+
+Configure server-only `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, and
+`CHECKOUT_PUBLIC_URL` (origin only: HTTPS, or HTTP on localhost/127.0.0.1 with an
+optional port; no trailing slash, credentials, query, fragment, or path).
+Invalid configuration returns `503 PAYMENT_UNAVAILABLE`. Currency is fixed to USD.
+Never expose or log the secret or hosted checkout URLs.
+
+- `POST /api/checkout`: `{"checkoutId":"ed6c1980-379e-4e8f-a41d-599812710124",
+  "branchId":1,"items":[{"productId":1,"quantity":2}]}`. IDs and quantities must
+  be positive JSON integers up to 2147483647; at most 100 lines. Duplicate products
+  combine (overflow rejected) and sort by product ID. The lowercase UUID v4 is an
+  unguessable capability: keep it private. Returns `200` with
+  `{checkoutId,status,checkoutUrl,amountTotal,currency:"usd",orderId}`; URL/order ID
+  may be null. A semantic retry reuses the saved request and pricing snapshot;
+  changed requests return `409 CONFLICT`.
+- Stock, branch, products, half-up discounted cents and total (50–99999999 cents)
+  are checked before Stripe. No stock is reserved. A durable `creating` row
+  precedes remote calls; retries use Stripe key `checkout-{checkoutId}`. Unknown
+  creation outcomes older than 23 hours require manual reconciliation, not a
+  new session or payment.
+- `POST /api/checkout/{checkoutId}/complete` retrieves Stripe server-side and
+  verifies identity, USD currency and saved amount. Unpaid sessions return
+  `409 PAYMENT_PENDING`; expired unpaid sessions become cancelled. Only paid,
+  complete sessions can create a confirmed order, atomically with snapshot-priced
+  details and stock allocation. Repeated/concurrent completion creates one order.
+- If stock or persistence fails, order writes roll back, then the payment intent
+  and `refund_pending` state commit before a Stripe refund using
+  `refund-{checkoutId}`. Only a succeeded refund becomes `refunded`; failed,
+  pending or uncertain refunds return `502 REFUND_PENDING`. Retry completion to
+  retry the same refund; a refund-pending checkout can never create an order.
+- `POST /api/checkout/{checkoutId}/cancel` verifies/expires the remote unpaid
+  session before persisting cancellation; paid sessions finalize instead.
+  Completed, cancelled and refunded checkouts are terminal.
+
+Verification is return-driven; this issue adds no webhook. Operators must
+reconcile abandoned pending/creating sessions and retry `complete` for known
+paid sessions or `refund_pending` rows. A creating row with unknown outcome needs
+Stripe-side reconciliation before any manual repair. Do not delete these durable
+records or start a replacement charge blindly.
+Provider errors return safe `502 PAYMENT_PROVIDER_ERROR` messages without Stripe
+bodies or credentials. All errors use the standard `{error:{code,message}}` envelope.
+Shared migration `004_checkout_payments.sql` is automatically applied.
+Tests mock the provider: no real Stripe credentials or calls are required.
+
 ## Verification
 
 ```bash

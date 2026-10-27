@@ -43,7 +43,7 @@
  *         status:
  *           type: string
  *           description: The current status of the order
- *           enum: [pending, processing, shipped, delivered, cancelled]
+ *           enum: [pending, confirmed, processing, shipped, delivered, cancelled]
  */
 export interface Order {
   orderId: number;

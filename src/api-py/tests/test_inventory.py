@@ -248,7 +248,7 @@ def test_concurrent_orders_cannot_oversell(client: TestClient) -> None:
 def test_shared_migrations_are_idempotent_and_constraints_apply(client: TestClient, isolated_database: Path) -> None:
     asyncio.run(initialize_database(seed_on_startup=True))
     with closing(sqlite3.connect(isolated_database)) as connection, connection:
-        assert connection.execute("SELECT COUNT(*) FROM migrations").fetchone()[0] == 3
+        assert connection.execute("SELECT COUNT(*) FROM migrations").fetchone()[0] == 4
         assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'inventory_%'").fetchone()[0] == 5
         for quantity in [-1, 1.5]:
             with pytest.raises(sqlite3.IntegrityError):
