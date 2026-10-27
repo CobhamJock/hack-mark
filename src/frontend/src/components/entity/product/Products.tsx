@@ -1,33 +1,22 @@
 import { useState } from 'react';
-import axios from 'axios';
 import { useQuery } from 'react-query';
-import { api } from '../../../api/config';
+import { fetchStockProducts, StockProduct } from '../../../api/inventory';
 import { useTheme } from '../../../context/ThemeContext';
-
-interface Product {
-  productId: number;
-  name: string;
-  description: string;
-  price: number;
-  imgName: string;
-  sku: string;
-  unit: string;
-  supplierId: number;
-  discount?: number;
-}
-
-const fetchProducts = async (): Promise<Product[]> => {
-  const { data } = await axios.get(`${api.baseURL}${api.endpoints.products}`);
-  return data;
-};
+import BranchSelect from '../../BranchSelect';
+import StockBadge from '../../StockBadge';
+import { useCart } from '../../../context/CartContext';
 
 export default function Products() {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [branchId, setBranchId] = useState(1);
+  const [stockError, setStockError] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<StockProduct | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const { data: products, isLoading, error } = useQuery('products', fetchProducts);
+  const { data: products, isLoading, error } = useQuery(['products', branchId], () => fetchStockProducts(branchId));
   const { darkMode } = useTheme();
+  const cart = useCart();
+  const [cartMessage, setCartMessage] = useState('');
 
   const filteredProducts = products?.filter(
     (product) =>
@@ -43,17 +32,39 @@ export default function Products() {
   }
 
   const handleQuantityChange = (productId: number, change: number) => {
+    const available = products?.find((product) => product.productId === productId)?.quantityOnHand ?? 0;
+    const next = Math.max(0, (quantities[productId] || 0) + change);
+    if (next > available) {
+      setStockError(`Only ${available} available at this branch. Reduce the quantity.`);
+      return;
+    }
+    setStockError('');
     setQuantities((prev) => ({
       ...prev,
-      [productId]: Math.max(0, (prev[productId] || 0) + change),
+      [productId]: next,
     }));
   };
 
   const handleAddToCart = (productId: number) => {
     const quantity = quantities[productId] || 0;
+    const available = products?.find((product) => product.productId === productId)?.quantityOnHand ?? 0;
+    if (quantity > available) {
+      setStockError(`Only ${available} available at this branch. Reduce the quantity.`);
+      return;
+    }
     if (quantity > 0) {
-      // TODO: Implement cart functionality
-      alert(`Added ${quantity} items to cart`);
+      const product = products?.find((item) => item.productId === productId);
+      if (!product) {
+        setStockError('Product is no longer available. Refresh the catalogue.');
+        return;
+      }
+      const error = cart.add(product, branchId, quantity);
+      if (error) {
+        setStockError(error);
+        return;
+      }
+      setStockError('');
+      setCartMessage(`Added ${quantity} ${product.name} to your cart.`);
       setQuantities((prev) => ({
         ...prev,
         [productId]: 0,
@@ -61,7 +72,7 @@ export default function Products() {
     }
   };
 
-  const handleProductClick = (product: Product) => {
+  const handleProductClick = (product: StockProduct) => {
     setSelectedProduct(product);
     setShowModal(true);
   };
@@ -103,6 +114,16 @@ export default function Products() {
           >
             Products
           </h1>
+          <div className={darkMode ? 'text-light' : 'text-gray-800'}>
+            <BranchSelect branchId={branchId} onChange={(id) => {
+              setBranchId(id);
+              setQuantities({});
+              setStockError('');
+              setShowModal(false);
+            }} />
+            {stockError && <p role="alert" className="mt-2 text-red-600">{stockError}</p>}
+            {cartMessage && <p role="status" className="mt-2">{cartMessage}</p>}
+          </div>
 
           <div className="relative">
             <input
@@ -190,6 +211,9 @@ export default function Products() {
                     {product.description}
                   </p>
                   <div className="space-y-4 mt-auto">
+                    <div className={darkMode ? 'text-light' : 'text-gray-800'}>
+                      <StockBadge product={product} />
+                    </div>
                     <div className="flex justify-between items-center">
                       {hasDiscount ? (
                         <div>
@@ -228,6 +252,7 @@ export default function Products() {
                         </span>
                         <button
                           onClick={() => handleQuantityChange(product.productId, 1)}
+                          disabled={product.quantityOnHand === 0 || (quantities[product.productId] || 0) >= product.quantityOnHand}
                           className={`w-8 h-8 flex items-center justify-center ${darkMode ? 'text-light' : 'text-gray-700'} hover:text-primary transition-colors duration-300`}
                           aria-label={`Increase quantity of ${product.name}`}
                           id={`increase-qty-${product.productId}`}
@@ -241,7 +266,7 @@ export default function Products() {
                           ? 'bg-primary hover:bg-accent text-white'
                           : `${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'} cursor-not-allowed`
                           }`}
-                        disabled={!quantities[product.productId]}
+                        disabled={!quantities[product.productId] || quantities[product.productId] > product.quantityOnHand}
                         aria-label={`Add ${quantities[product.productId] || 0} ${product.name} to cart`}
                         id={`add-to-cart-${product.productId}`}
                       >
@@ -296,6 +321,9 @@ export default function Products() {
             >
               {selectedProduct.name}
             </h2>
+            <div className={darkMode ? 'text-light' : 'text-gray-800'}>
+              <StockBadge product={products?.find((product) => product.productId === selectedProduct.productId) ?? selectedProduct} />
+            </div>
             <p
               className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} text-lg transition-colors duration-300`}
             >

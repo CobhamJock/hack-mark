@@ -7,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database.migrate import initialize_database
 from routes.branches import router as branches_router
+from routes.checkout import router as checkout_router
 from routes.deliveries import router as deliveries_router
 from routes.headquarters import router as headquarters_router
+from routes.inventory import router as inventory_router
 from routes.order_detail_deliveries import router as order_detail_deliveries_router
 from routes.order_details import router as order_details_router
 from routes.orders import router as orders_router
@@ -48,6 +50,8 @@ app.include_router(orders_router)
 app.include_router(branches_router)
 app.include_router(headquarters_router)
 app.include_router(suppliers_router)
+app.include_router(inventory_router)
+app.include_router(checkout_router)
 
 
 @app.on_event("startup")

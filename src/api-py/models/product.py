@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -13,6 +15,11 @@ class Product(BaseModel):
     unit: str
     imgName: str | None = None
     discount: float
+
+
+class ProductAvailability(Product):
+    quantityOnHand: int
+    stockStatus: Literal["out_of_stock", "low_stock", "in_stock"]
 
 
 class CreateProductRequest(BaseModel):

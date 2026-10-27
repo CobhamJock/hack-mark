@@ -1,8 +1,10 @@
 package com.octocat.supply.exception;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -10,6 +12,11 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(PaymentException.class)
+    public ResponseEntity<Map<String, Object>> handlePayment(PaymentException exception) {
+        return error(HttpStatus.valueOf(exception.getStatus()), exception);
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(NotFoundException exception) {
         return error(HttpStatus.NOT_FOUND, exception);
@@ -25,8 +32,33 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, exception);
     }
 
-    @ExceptionHandler({DatabaseException.class, DataIntegrityViolationException.class})
+    @ExceptionHandler(InventoryAccessException.class)
+    public ResponseEntity<Map<String, Object>> handleInventoryAccess(InventoryAccessException exception) {
+        return error(exception.isUnavailable() ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.FORBIDDEN, exception);
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, Object>> handleInvalidInput(Exception exception) {
+        return error(HttpStatus.BAD_REQUEST, new ValidationException("Invalid request: check field types and integer ranges"));
+    }
+
+    @ExceptionHandler({DatabaseException.class, DataAccessException.class})
     public ResponseEntity<Map<String, Object>> handleDatabase(RuntimeException exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message == null) {
+                continue;
+            }
+            if (message.contains("Insufficient stock")) {
+                return error(HttpStatus.CONFLICT, new ConflictException("Insufficient stock"));
+            }
+            if (message.contains("Quantity must be a positive integer")) {
+                return error(HttpStatus.BAD_REQUEST, new ValidationException("Quantity must be a positive integer"));
+            }
+            if (message.contains("Cannot change branch of an order with items")) {
+                return error(HttpStatus.BAD_REQUEST, new ValidationException("Cannot change branch of an order with items"));
+            }
+        }
         ApiException apiException = exception instanceof ApiException api ? api : new DatabaseException("Database operation failed.");
         return error(HttpStatus.INTERNAL_SERVER_ERROR, apiException);
     }

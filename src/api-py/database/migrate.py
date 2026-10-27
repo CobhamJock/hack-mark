@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 
 import aiosqlite
@@ -21,15 +22,31 @@ def _parse_migration_version(filename: str) -> int:
 
 
 def _split_sql_script(sql_script: str) -> list[str]:
-    return [statement.strip() for statement in sql_script.split(";") if statement.strip()]
+    statements: list[str] = []
+    pending = ""
+    for character in sql_script:
+        pending += character
+        if character == ";" and sqlite3.complete_statement(pending):
+            statements.append(pending)
+            pending = ""
+    if pending.strip():
+        statements.append(pending)
+    return statements
 
 
-async def _execute_sql_statements(connection: aiosqlite.Connection, sql_script: str) -> None:
+async def _execute_sql_statements(
+    connection: aiosqlite.Connection, sql_script: str, filename: str | None = None
+) -> None:
     statements = _split_sql_script(sql_script)
     await connection.execute("BEGIN;")
     try:
         for statement in statements:
             await connection.execute(statement)
+        if filename is not None:
+            await connection.execute(
+                "INSERT INTO migrations (version, filename) VALUES (?, ?);",
+                (_parse_migration_version(filename), filename),
+            )
         await connection.commit()
     except Exception:
         await connection.rollback()
@@ -70,12 +87,7 @@ async def _apply_migrations(connection: aiosqlite.Connection) -> None:
             continue
 
         sql = file_path.read_text(encoding="utf-8")
-        await _execute_sql_statements(connection, sql)
-        await connection.execute(
-            "INSERT INTO migrations (version, filename) VALUES (?, ?);",
-            (_parse_migration_version(file_path.name), file_path.name),
-        )
-        await connection.commit()
+        await _execute_sql_statements(connection, sql, file_path.name)
 
 
 async def _seed_if_needed(connection: aiosqlite.Connection) -> None:

@@ -9,7 +9,16 @@ public sealed record Product(
     string Sku,
     string Unit,
     string? ImgName,
-    double Discount);
+    double Discount)
+{
+    public int QuantityOnHand { get; init; }
+    public string StockStatus => QuantityOnHand switch
+    {
+        0 => "out_of_stock",
+        <= 5 => "low_stock",
+        _ => "in_stock"
+    };
+}
 
 public sealed class CreateProductRequest
 {

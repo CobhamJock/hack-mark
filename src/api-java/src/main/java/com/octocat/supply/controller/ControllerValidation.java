@@ -17,4 +17,17 @@ final class ControllerValidation {
             throw new ValidationException(fieldName + " is required");
         }
     }
+
+    static int positiveId(String value, String fieldName) {
+        if (value == null || !value.matches("[0-9]+")) {
+            throw new ValidationException(fieldName + " must be a positive integer");
+        }
+        try {
+            int id = Integer.parseInt(value);
+            requirePositive(id, fieldName);
+            return id;
+        } catch (NumberFormatException ex) {
+            throw new ValidationException(fieldName + " must be a positive integer");
+        }
+    }
 }

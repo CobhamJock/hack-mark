@@ -1,0 +1,42 @@
+@baseUrl = http://localhost:3000
+@branchId = 1
+@productId = 1
+
+### Branch product list (omit branchId to use branch 1)
+GET {{baseUrl}}/api/products?branchId={{branchId}}
+
+### Branch product detail
+GET {{baseUrl}}/api/products/{{productId}}?branchId={{branchId}}
+
+### Unknown branch
+GET {{baseUrl}}/api/products?branchId=2147483647
+
+### Set inventory; read the token from the local process environment
+PUT {{baseUrl}}/api/inventory/{{branchId}}/{{productId}}
+Authorization: Bearer {{$processEnv INVENTORY_ADMIN_TOKEN}}
+Content-Type: application/json
+
+{"quantityOnHand": 10}
+
+### Missing authorization (403, or 503 if administration is not configured)
+PUT {{baseUrl}}/api/inventory/{{branchId}}/{{productId}}
+Content-Type: application/json
+
+{"quantityOnHand": 10}
+
+### Atomic allocation at server prices
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "branchId": 1,
+  "name": "Branch stock order",
+  "orderDate": "2026-10-27",
+  "items": [{"productId": 1, "quantity": 2}]
+}
+
+### Existing header-only contract
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{"branchId": 1, "name": "Header only", "orderDate": "2026-10-27"}

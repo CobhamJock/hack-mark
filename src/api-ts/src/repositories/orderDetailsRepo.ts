@@ -4,8 +4,14 @@
 
 import { getDatabase, DatabaseConnection } from '../db/sqlite';
 import { OrderDetail } from '../models/orderDetail';
-import { handleDatabaseError, NotFoundError } from '../utils/errors';
+import { handleDatabaseError, NotFoundError, ValidationError } from '../utils/errors';
 import { buildInsertSQL, buildUpdateSQL, objectToCamelCase, mapDatabaseRows, DatabaseRow } from '../utils/sql';
+
+function validateQuantity(quantity: unknown): void {
+  if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity <= 0 || quantity > 2147483647) {
+    throw new ValidationError('Quantity must be a positive integer up to 2147483647');
+  }
+}
 
 export class OrderDetailsRepository {
   private db: DatabaseConnection;
@@ -44,6 +50,7 @@ export class OrderDetailsRepository {
    * Create a new order detail
    */
   async create(orderDetail: Omit<OrderDetail, 'orderDetailId'>): Promise<OrderDetail> {
+    validateQuantity(orderDetail.quantity);
     try {
       const { sql, values } = buildInsertSQL('order_details', orderDetail);
       const result = await this.db.run(sql, values);
@@ -66,6 +73,7 @@ export class OrderDetailsRepository {
     id: number,
     orderDetail: Partial<Omit<OrderDetail, 'orderDetailId'>>,
   ): Promise<OrderDetail> {
+    if ('quantity' in orderDetail) validateQuantity(orderDetail.quantity);
     try {
       const { sql, values } = buildUpdateSQL('order_details', orderDetail, 'order_detail_id = ?');
       const result = await this.db.run(sql, [...values, id]);
@@ -175,6 +183,9 @@ let orderDetailsRepo: OrderDetailsRepository | null = null;
 export async function getOrderDetailsRepository(
   isTest: boolean = false,
 ): Promise<OrderDetailsRepository> {
+  if (isTest || process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
+    return createOrderDetailsRepository(true);
+  }
   if (!orderDetailsRepo) {
     orderDetailsRepo = await createOrderDetailsRepository(isTest);
   }

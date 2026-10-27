@@ -8,7 +8,8 @@ public final class OrderDetailModel {
         int orderDetailId,
         int orderId,
         int productId,
-        int quantity
+        int quantity,
+        double unitPrice
     ) {
     }
 

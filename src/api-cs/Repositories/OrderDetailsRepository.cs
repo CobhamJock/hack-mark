@@ -37,6 +37,10 @@ public sealed class OrderDetailsRepository(SqliteConnectionFactory connectionFac
 
     public async Task<OrderDetail> CreateAsync(CreateOrderDetailRequest request)
     {
+        if (request.Quantity <= 0 || request.ProductId <= 0 || request.OrderId <= 0)
+        {
+            throw new ValidationException("orderId, productId and quantity must be positive integers");
+        }
         const string sql = """
             INSERT INTO order_details (order_id, product_id, quantity, unit_price, notes)
             VALUES ($orderId, $productId, $quantity, $unitPrice, $notes);
@@ -52,12 +56,16 @@ public sealed class OrderDetailsRepository(SqliteConnectionFactory connectionFac
         cmd.Parameters.AddWithValue("$unitPrice", request.UnitPrice);
         cmd.Parameters.AddWithValue("$notes", (object?)request.Notes ?? DBNull.Value);
 
-        var id = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        var id = Convert.ToInt32(await cmd.ExecuteInventoryInsertAsync());
         return await FindByIdAsync(id) ?? throw new DatabaseException("Failed to retrieve created OrderDetail");
     }
 
     public async Task<OrderDetail> UpdateAsync(int id, UpdateOrderDetailRequest request)
     {
+        if (request.Quantity is <= 0 || request.ProductId is <= 0 || request.OrderId is <= 0)
+        {
+            throw new ValidationException("orderId, productId and quantity must be positive integers");
+        }
         var updates = new List<string>();
         var parameters = new List<SqliteParameter>();
         if (request.OrderId.HasValue) { updates.Add("order_id = $orderId"); parameters.Add(new SqliteParameter("$orderId", request.OrderId.Value)); }
@@ -80,7 +88,7 @@ public sealed class OrderDetailsRepository(SqliteConnectionFactory connectionFac
         {
             cmd.Parameters.Add(parameter);
         }
-        var changes = await cmd.ExecuteNonQueryAsync();
+        var changes = await cmd.ExecuteInventoryWriteAsync();
         if (changes == 0)
         {
             throw new NotFoundException("OrderDetail", id);
@@ -103,7 +111,7 @@ public sealed class OrderDetailsRepository(SqliteConnectionFactory connectionFac
         }
     }
 
-    private static OrderDetail Map(SqliteDataReader reader) =>
+    internal static OrderDetail Map(SqliteDataReader reader) =>
         new(
             OrderDetailId: reader.GetInt32(reader.GetOrdinal("order_detail_id")),
             OrderId: reader.GetInt32(reader.GetOrdinal("order_id")),
