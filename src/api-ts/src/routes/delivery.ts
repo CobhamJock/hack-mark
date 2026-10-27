@@ -147,12 +147,15 @@
 
 import express from 'express';
 import { Delivery } from '../models/delivery';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { getDeliveriesRepository } from '../repositories/deliveriesRepo';
 import { NotFoundError } from '../utils/errors';
 
 
 const router = express.Router();
+
+// Partner names are passed to an external command, so only allow plain names
+const PARTNER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,99}$/;
 
 // Create a new delivery
 router.post('/', async (req, res, next) => {
@@ -195,6 +198,15 @@ router.get('/:id', async (req, res, next) => {
 router.put('/:id/status', async (req, res, next) => {
   try {
     const { status, deliveryPartner } = req.body;
+    if (
+      deliveryPartner !== undefined &&
+      deliveryPartner !== null &&
+      deliveryPartner !== '' &&
+      (typeof deliveryPartner !== 'string' || !PARTNER_NAME_PATTERN.test(deliveryPartner))
+    ) {
+      res.status(400).send('Invalid delivery partner');
+      return;
+    }
     const repo = await getDeliveriesRepository();
     const delivery = await repo.findById(parseInt(req.params.id));
 
@@ -202,7 +214,7 @@ router.put('/:id/status', async (req, res, next) => {
       const updatedDelivery = await repo.updateStatus(parseInt(req.params.id), status);
 
       if (deliveryPartner) {
-        exec(`notify ${deliveryPartner}`, (error, stdout) => {
+        execFile('notify', [deliveryPartner], (error, stdout) => {
           if (error) {
             console.error(`Error executing command: ${error}`);
             return res.status(500).json({ error: error.message });

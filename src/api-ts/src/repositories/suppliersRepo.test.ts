@@ -113,7 +113,7 @@ describe('SuppliersRepository', () => {
 
             expect(mockDb.run).toHaveBeenCalledWith(
                 'INSERT INTO suppliers (name, description, contact_person, email, phone, active, verified) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                ['New Supplier', 'New Description', 'Jane Doe', 'jane@test.com', '555-5678', true, false]
+                ['New Supplier', 'New Description', 'Jane Doe', 'jane@test.com', '555-5678', 1, 0]
             );
             expect(result.supplierId).toBe(2);
             expect(result.name).toBe('New Supplier');

@@ -160,7 +160,7 @@ router.get('/:id', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const repo = await getProductsRepository();
-    const updatedProduct = await repo.update(parseInt(req.params.id), req.body);
+    const updatedProduct = await repo.update(positiveId(req.params.id, 'productId'), req.body);
     res.json(updatedProduct);
   } catch (error) {
     if (error instanceof NotFoundError) {
@@ -175,7 +175,7 @@ router.put('/:id', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     const repo = await getProductsRepository();
-    await repo.delete(parseInt(req.params.id));
+    await repo.delete(positiveId(req.params.id, 'productId'));
     res.status(204).send();
   } catch (error) {
     if (error instanceof NotFoundError) {

@@ -137,4 +137,27 @@ describe('Product API', () => {
     expect(deleted.status).toBe(204);
     expect(fetched.status).toBe(404);
   });
+
+  it.each(['abc', '0', '-1', '1abc', '1.5', '99999999999'])(
+    'rejects malformed ID %s on update and delete with 400',
+    async (id) => {
+      const product = await create();
+
+      const put = await request(app).put(`/products/${id}`).send({ price: 1 });
+      const del = await request(app).delete(`/products/${id}`);
+      const unchanged = await request(app).get(`/products/${product.productId}`);
+
+      expect(put.status).toBe(400);
+      expect(del.status).toBe(400);
+      expect(unchanged.body.price).toBe(newProduct.price);
+    },
+  );
+
+  it('does not act on a partially numeric ID like 1abc', async () => {
+    const product = await create();
+
+    await request(app).delete(`/products/${product.productId}abc`);
+
+    expect((await request(app).get(`/products/${product.productId}`)).status).toBe(200);
+  });
 });

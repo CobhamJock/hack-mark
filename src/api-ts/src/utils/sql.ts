@@ -2,6 +2,8 @@
  * SQL helper utilities
  */
 
+import { ValidationError } from './errors';
+
 export interface QueryBuilder {
   select: string[];
   from: string;
@@ -167,6 +169,35 @@ export function generatePlaceholders(count: number): string {
   return Array(count).fill('?').join(', ');
 }
 
+const COLUMN_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
+
+/**
+ * Convert request data into validated snake_case column names and bindable values.
+ * Keys come from client JSON, so they must never reach the SQL text unchecked.
+ */
+function toColumnsAndValues(data: Record<string, unknown>): { columns: string[]; values: unknown[] } {
+  const columns: string[] = [];
+  const values: unknown[] = [];
+
+  for (const [key, value] of Object.entries(data)) {
+    const column = toSnakeCase(key);
+    if (!COLUMN_NAME_PATTERN.test(column)) {
+      throw new ValidationError(`Invalid field name '${key}'`);
+    }
+    if (typeof value === 'object' && value !== null) {
+      throw new ValidationError(`Field '${key}' must be a primitive value`);
+    }
+    columns.push(column);
+    values.push(typeof value === 'boolean' ? Number(value) : value);
+  }
+
+  if (columns.length === 0) {
+    throw new ValidationError('No fields provided');
+  }
+
+  return { columns, values };
+}
+
 /**
  * Build INSERT SQL with placeholders
  */
@@ -174,9 +205,7 @@ export function buildInsertSQL<T extends Record<string, unknown>>(
   table: string,
   data: T,
 ): { sql: string; values: unknown[] } {
-  const snakeCaseData = objectToSnakeCase(data);
-  const columns = Object.keys(snakeCaseData);
-  const values = Object.values(snakeCaseData);
+  const { columns, values } = toColumnsAndValues(data);
   const placeholders = generatePlaceholders(columns.length);
 
   const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
@@ -192,9 +221,7 @@ export function buildUpdateSQL<T extends Record<string, unknown>>(
   data: Partial<T>,
   whereClause: string,
 ): { sql: string; values: unknown[] } {
-  const snakeCaseData = objectToSnakeCase(data as Record<string, unknown>);
-  const columns = Object.keys(snakeCaseData);
-  const values = Object.values(snakeCaseData);
+  const { columns, values } = toColumnsAndValues(data as Record<string, unknown>);
 
   const setClause = columns.map((col) => `${col} = ?`).join(', ');
   const sql = `UPDATE ${table} SET ${setClause} WHERE ${whereClause}`;

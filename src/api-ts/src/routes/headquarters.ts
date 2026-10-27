@@ -194,8 +194,7 @@ router.post('/', async (req, res, next) => {
   try {
     const repo = await getHeadquartersRepository();
 
-    const hqValidator = new (HeadquartersValidator as any)(req.body.name, req.body.address);
-    if (!hqValidator.isValid()) {
+    if (!isValidHeadquarters(req.body?.name, req.body?.address)) {
       res.status(400).send('Invalid headquarters data');
       return;
     }
@@ -212,8 +211,7 @@ router.put('/:id', async (req, res, next) => {
   try {
     const repo = await getHeadquartersRepository();
 
-    const hqValidator = (HeadquartersValidator as any)(req.body.name, req.body.address);
-    if (!hqValidator.isValid()) {
+    if (!isValidHeadquarters(req.body?.name, req.body?.address)) {
       res.status(400).send('Invalid headquarters data');
       return;
     }
@@ -289,17 +287,14 @@ router.get('/:id/label', async (req, res, next) => {
 
 
 
-// Inconsistent use of new: helper function used both as constructor and regular function
-function HeadquartersValidator(this: any, name: any, address: any) {
-  if(!validateHQName(name)) {
-    throw new Error('Invalid headquarters name');
-  };
-
-  this.name = name;
-  this.address = address;
-  this.isValid = function () {
-    return this.name && this.address;
-  };
+// Name and address are both required, non-blank strings
+function isValidHeadquarters(name: unknown, address: unknown): boolean {
+  return (
+    typeof name === 'string' &&
+    name.trim() !== '' &&
+    typeof address === 'string' &&
+    address.trim() !== ''
+  );
 }
 
 // Missing space in concatenation example
@@ -320,16 +315,6 @@ function calculateHeadquartersMetrics(id: any, floorCount: any, capacity: any): 
     average: averageValue,
     display: displayText
   };
-}
-
-// Misleading indentation example
-function validateHQName(hq: any): boolean {
-  if (hq.name) 
-    console.log('Name is valid');
-    return true; // This appears to be part of the if, but it's not!
-  console.log('Name is invalid');
-
-  return false;
 }
 
 export default router;
