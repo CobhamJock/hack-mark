@@ -50,6 +50,19 @@ export function handleDatabaseError(error: unknown, entity?: string, id?: string
     throw new ValidationError(error.message);
   }
   if(!(error instanceof DatabaseError)) {
+    const sqliteCode = (error as { code?: unknown } | null)?.code;
+    if (typeof sqliteCode === 'string') {
+      // Trigger aborts (e.g. insufficient stock) carry their own handling and are left as-is.
+      if (sqliteCode === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+        throw new ValidationError('Invalid reference to related entity');
+      }
+      if (sqliteCode === 'SQLITE_CONSTRAINT_UNIQUE' || sqliteCode === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+        throw new ConflictError('Resource already exists');
+      }
+      if (sqliteCode === 'SQLITE_CONSTRAINT_NOTNULL' || sqliteCode === 'SQLITE_CONSTRAINT_CHECK') {
+        throw new ValidationError('Request violates a data constraint');
+      }
+    }
     const message = error instanceof Error ? error.message : error;
 
     // Default to generic database error

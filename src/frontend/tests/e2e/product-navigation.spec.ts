@@ -73,4 +73,51 @@ test.describe('Product catalog discovery', () => {
     // And I am prompted to adjust the search filters
     await expect(emptyState).toContainText(/clearing.*changing.*search filters/i);
   });
+
+  test('Search is case-insensitive and matches product descriptions', async ({ page }) => {
+    await page.goto('/products');
+    await expect(page.locator('h1:has-text("Products")')).toBeVisible();
+    await expect(page.locator('h3:has-text("SmartFeeder One")')).toBeVisible();
+
+    await page.getByRole('textbox', { name: 'Search products' }).fill('NAP CYCLES');
+
+    await expect(page.locator('h3:has-text("SmartFeeder One")')).toBeVisible();
+    await expect(page.locator('h3')).toHaveCount(1);
+  });
+
+  test('clearing a search restores the full product catalog', async ({ page }) => {
+    await page.goto('/products');
+    const searchInput = page.getByRole('textbox', { name: 'Search products' });
+    await expect(page.locator('h3').first()).toBeVisible();
+    const initialProductCount = await page.locator('h3').count();
+
+    await searchInput.fill('Space Tuna');
+    await expect(page.getByRole('status')).toContainText('No products found');
+
+    await searchInput.clear();
+    await expect(page.locator('h3')).toHaveCount(initialProductCount);
+    await expect(page.getByRole('status')).toHaveCount(0);
+  });
+
+  test('shows an explicit error when the products API fails', async ({ page }) => {
+    await page.route('**/api/products?*', async (route) => {
+      await route.fulfill({ status: 503, body: 'Service unavailable' });
+    });
+
+    await page.goto('/products');
+
+    await expect(page.getByText('Failed to fetch products')).toBeVisible();
+  });
+
+  test('shows a neutral empty state when the API returns no products', async ({ page }) => {
+    await page.route('**/api/products?*', async (route) => {
+      await route.fulfill({ status: 200, json: [] });
+    });
+
+    await page.goto('/products');
+
+    const emptyState = page.getByRole('status');
+    await expect(emptyState).toContainText('No products found');
+    await expect(emptyState).not.toContainText('Try clearing or changing your search filters.');
+  });
 });
