@@ -1,0 +1,21 @@
+@baseUrl = http://localhost:3000
+@checkoutId = 06e315cc-9a65-47ea-9655-1a664d7e780f
+
+### Start or recover checkout; stock must exist at this branch
+POST {{baseUrl}}/api/checkout
+Content-Type: application/json
+
+{
+  "checkoutId": "{{checkoutId}}",
+  "branchId": 1,
+  "items": [{"productId": 1, "quantity": 2}]
+}
+
+### After hosted card payment: server verifies Stripe, not the browser result flag
+POST {{baseUrl}}/api/checkout/{{checkoutId}}/complete
+
+### Expire unpaid checkout, or complete if payment already succeeded
+POST {{baseUrl}}/api/checkout/{{checkoutId}}/cancel
+
+### Unknown capability: 404 NOT_FOUND
+POST {{baseUrl}}/api/checkout/6ce92adb-4fc6-4f27-8f72-5c91133f56f7/complete

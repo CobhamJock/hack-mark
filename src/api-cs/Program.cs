@@ -1,6 +1,7 @@
 using OctoSupply.Api.Data;
 using OctoSupply.Api.Repositories;
 using OctoSupply.Api.Utils;
+using OctoSupply.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,12 @@ builder.Services.AddScoped<OrdersRepository>();
 builder.Services.AddScoped<ProductsRepository>();
 builder.Services.AddScoped<InventoryRepository>();
 builder.Services.AddScoped<SuppliersRepository>();
+builder.Services.AddScoped<CheckoutsRepository>();
+builder.Services.AddScoped<ICheckoutService, CheckoutService>();
+builder.Services.AddHttpClient<IPaymentProvider, StripePaymentProvider>(client =>
+    client.Timeout = TimeSpan.FromSeconds(15))
+    .RemoveAllLoggers()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
 builder.Services.AddCors(options =>
 {

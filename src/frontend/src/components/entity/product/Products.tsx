@@ -4,6 +4,7 @@ import { fetchStockProducts, StockProduct } from '../../../api/inventory';
 import { useTheme } from '../../../context/ThemeContext';
 import BranchSelect from '../../BranchSelect';
 import StockBadge from '../../StockBadge';
+import { useCart } from '../../../context/CartContext';
 
 export default function Products() {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
@@ -14,6 +15,8 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false);
   const { data: products, isLoading, error } = useQuery(['products', branchId], () => fetchStockProducts(branchId));
   const { darkMode } = useTheme();
+  const cart = useCart();
+  const [cartMessage, setCartMessage] = useState('');
 
   const filteredProducts = products?.filter(
     (product) =>
@@ -50,8 +53,18 @@ export default function Products() {
       return;
     }
     if (quantity > 0) {
-      // TODO: Implement cart functionality
-      alert(`Added ${quantity} items to cart`);
+      const product = products?.find((item) => item.productId === productId);
+      if (!product) {
+        setStockError('Product is no longer available. Refresh the catalogue.');
+        return;
+      }
+      const error = cart.add(product, branchId, quantity);
+      if (error) {
+        setStockError(error);
+        return;
+      }
+      setStockError('');
+      setCartMessage(`Added ${quantity} ${product.name} to your cart.`);
       setQuantities((prev) => ({
         ...prev,
         [productId]: 0,
@@ -109,6 +122,7 @@ export default function Products() {
               setShowModal(false);
             }} />
             {stockError && <p role="alert" className="mt-2 text-red-600">{stockError}</p>}
+            {cartMessage && <p role="status" className="mt-2">{cartMessage}</p>}
           </div>
 
           <div className="relative">

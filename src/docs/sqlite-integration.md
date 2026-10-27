@@ -27,6 +27,10 @@ The database consists of the following tables:
 - `migrations` - Database schema version tracking
 - `inventory` - Available stock per branch/product (migration 003)
 - `inventory_allocations` - Order details whose stock was allocated after migration 003
+- `checkouts` - Durable hosted-payment snapshots, provider references, outcomes and order linkage (migration 004)
+
+For hosted payment setup, API contract, refund handling and operator reconciliation,
+see [Cart payments](./payments.md).
 
 ### Branch inventory
 

@@ -184,7 +184,7 @@ describe('Branch inventory', () => {
       const runner = new MigrationRunner(new DatabaseConnection(old), migrationDir);
       await runner.runMigrations();
       await runner.runMigrations();
-      expect(await runner.getCurrentVersion()).toBe(3);
+      expect(await runner.getCurrentVersion()).toBe(4);
       expect(old.prepare('SELECT COUNT(*) AS count FROM inventory').get()).toEqual({ count: 0 });
       old.exec('INSERT INTO inventory VALUES(1,1,5); DELETE FROM orders WHERE order_id = 1;');
       expect(old.prepare('SELECT quantity_on_hand FROM inventory').get()).toEqual({ quantity_on_hand: 5 });

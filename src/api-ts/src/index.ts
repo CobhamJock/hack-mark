@@ -11,6 +11,7 @@ import branchRoutes from './routes/branch';
 import headquartersRoutes from './routes/headquarters';
 import supplierRoutes from './routes/supplier';
 import inventoryRoutes from './routes/inventory';
+import checkoutRoutes from './routes/checkout';
 import { initializeDatabase } from './init-db';
 import { errorHandler } from './utils/errors';
 
@@ -82,6 +83,7 @@ app.use('/api/branches', branchRoutes);
 app.use('/api/headquarters', headquartersRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/checkout', checkoutRoutes);
 
 app.get('/', (req, res) => {
   res.send('Hello, world!');
