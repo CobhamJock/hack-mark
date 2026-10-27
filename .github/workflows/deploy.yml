@@ -69,7 +69,7 @@ jobs:
       - name: Build and push images
         run: |
           az acr build -r "${{ steps.platform.outputs.acr }}" -t "api:$TAG" \
-            -f api-ts/Dockerfile src
+            -f src/api-ts/Dockerfile src
           az acr build -r "${{ steps.platform.outputs.acr }}" -t "frontend:$TAG" \
             src/frontend
 
