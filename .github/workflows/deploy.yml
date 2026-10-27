@@ -73,13 +73,27 @@ jobs:
           az acr build -r "${{ steps.platform.outputs.acr }}" -t "frontend:$TAG" \
             src/frontend
 
-      # SQLite on Azure Files must have a single writer. Container Apps keeps the
-      # old revision serving until the new one is ready, so stop the old API first.
-      - name: Stop running API replicas (exclusive SQLite access)
+      # SQLite on Azure Files must have a single writer. The API runs in multiple-revision
+      # mode, so deactivate every existing revision and wait for its replicas to stop
+      # before the new revision is created.
+      - name: Stop old API revisions (exclusive SQLite access)
         run: |
           api=$(az containerapp list -g "$RG" --query "[?ends_with(name,'-api')].name | [0]" -o tsv)
           if [ -n "$api" ]; then
-            az containerapp update -g "$RG" -n "$api" --min-replicas 0 --max-replicas 0
+            for rev in $(az containerapp revision list -g "$RG" -n "$api" --query "[?properties.active].name" -o tsv); do
+              az containerapp revision deactivate -g "$RG" -n "$api" --revision "$rev"
+            done
+            for i in $(seq 1 30); do
+              running=0
+              for rev in $(az containerapp revision list -g "$RG" -n "$api" --query "[].name" -o tsv); do
+                n=$(az containerapp replica list -g "$RG" -n "$api" --revision "$rev" --query "length(@)" -o tsv 2>/dev/null || echo 0)
+                running=$((running + n))
+              done
+              echo "API replicas still running: $running"
+              [ "$running" -eq 0 ] && break
+              [ "$i" -eq 30 ] && { echo "Old API replicas did not stop"; exit 1; }
+              sleep 10
+            done
           fi
 
       - name: Deploy container apps

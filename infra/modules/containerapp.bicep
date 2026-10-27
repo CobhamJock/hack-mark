@@ -49,6 +49,13 @@ param maxReplicas int = 1
 param cpu string = '0.5'
 param memory string = '1.0Gi'
 
+@description('Single keeps the old revision serving until the new one is ready; Multiple lets the pipeline deactivate old revisions first.')
+@allowed([
+  'Single'
+  'Multiple'
+])
+param revisionMode string = 'Single'
+
 var hasVolume = !empty(storageLinkName)
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -64,7 +71,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: environmentId
     configuration: {
-      activeRevisionsMode: 'Single'
+      activeRevisionsMode: revisionMode
       ingress: {
         external: externalIngress
         targetPort: targetPort

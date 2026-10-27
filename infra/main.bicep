@@ -116,6 +116,9 @@ module apiApp 'modules/containerapp.bicep' = if (deployApps) {
     registryLoginServer: registry.outputs.loginServer
     identityId: pullIdentity.id
     storageLinkName: environment.outputs.storageLinkName
+    // Multiple: the pipeline deactivates old revisions before each deploy so only one
+    // process ever opens the SQLite file
+    revisionMode: 'Multiple'
     // SQLite on one replica only: concurrent writers over SMB would corrupt it
     minReplicas: 1
     maxReplicas: 1

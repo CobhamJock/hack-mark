@@ -23,8 +23,9 @@ Design decisions:
   because concurrent SQLite writers over SMB are unsafe. Migrations and seeding run on start and are idempotent.
 - **No secrets in source.** Registry pulls use managed identity; GitHub deploys with OIDC.
 
-Because a new revision starts before the old one is retired, the workflow scales the existing API
-to zero replicas before each deployment so two revisions never open the database together
+Because a new revision starts before the old one is retired in single-revision mode, the API runs in
+multiple-revision mode and the workflow deactivates all existing API revisions, then waits for their
+replicas to stop, before each deployment. Two revisions therefore never open the database together
 (this causes a short API outage on every deploy).
 
 ## Two-phase deployment
