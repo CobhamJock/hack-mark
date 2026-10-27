@@ -56,6 +56,9 @@ param memory string = '1.0Gi'
 ])
 param revisionMode string = 'Single'
 
+@description('Optional revision suffix; a distinct value forces a new revision even when the template is unchanged.')
+param revisionSuffix string = ''
+
 var hasVolume = !empty(storageLinkName)
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -92,6 +95,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
     }
     template: {
+      revisionSuffix: empty(revisionSuffix) ? null : revisionSuffix
       containers: [
         {
           name: appName

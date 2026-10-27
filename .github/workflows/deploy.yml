@@ -80,13 +80,17 @@ jobs:
         run: |
           api=$(az containerapp list -g "$RG" --query "[?ends_with(name,'-api')].name | [0]" -o tsv)
           if [ -n "$api" ]; then
+            # --all includes inactive revisions, so the shutdown check still covers
+            # revisions deactivated by this step or earlier runs
+            revs=$(az containerapp revision list -g "$RG" -n "$api" --all --query "[].name" -o tsv)
             for rev in $(az containerapp revision list -g "$RG" -n "$api" --query "[?properties.active].name" -o tsv); do
               az containerapp revision deactivate -g "$RG" -n "$api" --revision "$rev"
             done
             for i in $(seq 1 30); do
               running=0
-              for rev in $(az containerapp revision list -g "$RG" -n "$api" --query "[].name" -o tsv); do
-                n=$(az containerapp replica list -g "$RG" -n "$api" --revision "$rev" --query "length(@)" -o tsv 2>/dev/null || echo 0)
+              for rev in $revs; do
+                # a failed query must not be read as "no replicas"
+                n=$(az containerapp replica list -g "$RG" -n "$api" --revision "$rev" --query "length(@)" -o tsv) || { echo "replica query failed"; exit 1; }
                 running=$((running + n))
               done
               echo "API replicas still running: $running"
@@ -95,12 +99,12 @@ jobs:
               sleep 10
             done
           fi
-
       - name: Deploy container apps
         id: apps
         run: |
           az deployment group create -g "$RG" -f infra/main.bicep \
             -p infra/main.parameters.json deployApps=true imageTag="$TAG" \
+            apiRevisionSuffix="g${{ github.run_id }}-${{ github.run_attempt }}" \
             --query properties.outputs -o json > outputs.json
           echo "frontend=$(jq -r .frontendUrl.value outputs.json)" >> "$GITHUB_OUTPUT"
           echo "api=$(jq -r .apiUrl.value outputs.json)" >> "$GITHUB_OUTPUT"

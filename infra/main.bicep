@@ -35,6 +35,9 @@ param deployApps bool = true
 @description('Image tag to deploy for both apps (e.g. the commit SHA).')
 param imageTag string = 'latest'
 
+@description('Unique suffix for the API revision (e.g. run id + attempt) so every deployment creates a new revision.')
+param apiRevisionSuffix string = ''
+
 var baseName = '${namePrefix}-${environmentName}'
 var compactName = toLower(replace('${namePrefix}${environmentName}', '-', ''))
 var uniq = take(uniqueString(resourceGroup().id), 5)
@@ -119,6 +122,7 @@ module apiApp 'modules/containerapp.bicep' = if (deployApps) {
     // Multiple: the pipeline deactivates old revisions before each deploy so only one
     // process ever opens the SQLite file
     revisionMode: 'Multiple'
+    revisionSuffix: apiRevisionSuffix
     // SQLite on one replica only: concurrent writers over SMB would corrupt it
     minReplicas: 1
     maxReplicas: 1
