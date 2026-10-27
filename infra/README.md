@@ -42,7 +42,7 @@ Images must exist before the apps do, so `main.bicep` has a `deployApps` switch:
 RG=rg-labuser-0033
 az deployment group create -g $RG -f infra/main.bicep -p infra/main.parameters.json deployApps=false
 ACR=$(az deployment group show -g $RG -n main --query properties.outputs.acrName.value -o tsv)
-az acr build -r $ACR -t api:dev -f api-ts/Dockerfile src
+az acr build -r $ACR -t api:dev -f src/api-ts/Dockerfile src
 az acr build -r $ACR -t frontend:dev src/frontend
 az deployment group create -g $RG -f infra/main.bicep -p infra/main.parameters.json deployApps=true imageTag=dev
 ```
