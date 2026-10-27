@@ -26,11 +26,11 @@ param tags object = {}
 ])
 param sku string = 'Basic'
 
-// TODO: For OIDC/managed-identity pulls you can (and ideally should) keep the
-//       admin user DISABLED and grant the Container Apps' identity AcrPull
-//       instead. The scaffold defaults to enabled to keep first-run simple —
-//       flip this to false once you wire up role assignments.
-param adminUserEnabled bool = true
+@description('Admin user is disabled; apps pull with a managed identity holding AcrPull.')
+param adminUserEnabled bool = false
+
+@description('Principal ID of the managed identity that is granted AcrPull.')
+param pullPrincipalId string
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
   name: registryName
@@ -43,6 +43,18 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = 
     adminUserEnabled: adminUserEnabled
     // TODO: Consider `publicNetworkAccess: 'Disabled'` + private endpoints for
     //       a hardened setup, and `anonymousPullEnabled: false`.
+  }
+}
+
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+
+resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(registry.id, pullPrincipalId, acrPullRoleId)
+  scope: registry
+  properties: {
+    principalId: pullPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
   }
 }
 
